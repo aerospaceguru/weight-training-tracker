@@ -1,0 +1,205 @@
+<html>
+<head>
+    <title>Weight Training Log</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * { box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+            margin: 0;
+            padding: 16px;
+            background: #f5f5f5;
+        }
+        h2 { 
+            margin: 0 0 16px 0;
+            font-size: 1.5rem;
+        }
+        form {
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            margin: 12px 0 4px 0;
+            font-size: 0.9rem;
+        }
+        input, select, button {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        button {
+            background: #007aff;
+            color: white;
+            font-weight: 600;
+            border: none;
+            margin-top: 8px;
+            cursor: pointer;
+        }
+        button:active {
+            background: #0051d5;
+        }
+        .cancel-btn {
+            background: #6c757d;
+        }
+        .cancel-btn:active {
+            background: #5a6268;
+        }
+        .delete-btn {
+            background: #dc3545;
+            padding: 8px 12px;
+            font-size: 14px;
+            width: auto;
+            display: inline-block;
+            margin-top: 0;
+        }
+        .delete-btn:active {
+            background: #c82333;
+        }
+        table {
+            width: 100%;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            font-size: 0.9rem;
+            margin-bottom: 16px;
+        }
+        th {
+            background: #f8f8f8;
+            font-weight: 600;
+            padding: 12px 8px;
+            text-align: left;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        td {
+            padding: 12px 8px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        tr:last-child td {
+            border-bottom: none;
+        }
+        tr.clickable {
+            cursor: pointer;
+        }
+        tr.clickable:hover {
+            background: #f8f9fa;
+        }
+        tr.editing {
+            background: #fff3cd;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 16px;
+        }
+        .pagination a, .pagination span {
+            padding: 8px 12px;
+            background: white;
+            border-radius: 6px;
+            text-decoration: none;
+            color: #007aff;
+            font-weight: 600;
+        }
+        .pagination span {
+            background: #007aff;
+            color: white;
+        }
+        .button-group {
+            display: flex;
+            gap: 8px;
+        }
+        .button-group button {
+            flex: 1;
+        }
+        @media (max-width: 600px) {
+            th:first-child, td:first-child {
+                font-size: 0.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<h2>{% if edit_log %}Edit{% else %}Log{% endif %} Exercise</h2>
+
+<form method="post">
+    {% if edit_log %}
+    <input type="hidden" name="log_id" value="{{ edit_log.id }}">
+    {% endif %}
+    
+    <label>{% if edit_log %}Current Exercise{% else %}Existing Exercise{% endif %}</label>
+    <select name="exercise_id">
+        {% if not edit_log %}
+        <option value="">Select exercise...</option>
+        {% endif %}
+        {% for ex in exercises %}
+            <option value="{{ ex.id }}" {% if edit_log and edit_log.exercise_id == ex.id %}selected{% endif %}>{{ ex.name }}</option>
+        {% endfor %}
+    </select>
+
+    {% if not edit_log %}
+    <label>Or New Exercise</label>
+    <input type="text" name="new_exercise" placeholder="e.g. Squat">
+    {% endif %}
+
+    <label>Weight (kg)</label>
+    <input type="number" step="0.1" name="weight" required value="{% if edit_log %}{{ edit_log.weight }}{% endif %}">
+
+    <label>Repetitions</label>
+    <input type="number" name="reps" required value="{% if edit_log %}{{ edit_log.reps }}{% endif %}">
+
+    {% if edit_log %}
+    <div class="button-group">
+        <button type="submit">Update</button>
+        <a href="/" style="text-decoration: none; flex: 1;">
+            <button type="button" class="cancel-btn" style="width: 100%;">Cancel</button>
+        </a>
+    </div>
+    {% else %}
+    <button type="submit">Save</button>
+    {% endif %}
+</form>
+
+<h2>Recent Entries</h2>
+
+<table>
+    <tr>
+        <th>Date/Time</th>
+        <th>Exercise</th>
+        <th>Weight</th>
+        <th>Reps</th>
+    </tr>
+    {% for log in logs %}
+    <tr class="clickable {% if edit_log and edit_log.id == log.id %}editing{% endif %}" 
+        onclick="window.location='/?edit={{ log.id }}'">
+        <td>{{ log.timestamp }}</td>
+        <td>{{ log.name }}</td>
+        <td>{{ log.weight }}</td>
+        <td>{{ log.reps }}</td>
+    </tr>
+    {% endfor %}
+</table>
+
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% if page > 1 %}
+    <a href="?page={{ page - 1 }}">← Prev</a>
+    {% endif %}
+    
+    <span>Page {{ page }} of {{ total_pages }}</span>
+    
+    {% if page < total_pages %}
+    <a href="?page={{ page + 1 }}">Next →</a>
+    {% endif %}
+</div>
+{% endif %}
+
+</body>
+</html>
