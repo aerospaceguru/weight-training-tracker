@@ -5,3 +5,6 @@ __pycache__/
 *.sqlite
 *.sqlite3
 .DS_Store
+
+# Email script with credentials
+weekly_email.py

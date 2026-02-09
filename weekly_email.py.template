@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+import sqlite3
+import csv
+import io
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
+from datetime import datetime
+
+DB = "/home/martin/weight_training_app/training.db"
+
+def export_csv():
+    conn = sqlite3.connect(DB)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    
+    c.execute("""
+        SELECT l.timestamp, e.name, l.weight, l.reps
+        FROM logs l
+        JOIN exercises e ON l.exercise_id = e.id
+        ORDER BY l.timestamp DESC
+    """)
+    logs = c.fetchall()
+    conn.close()
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Date/Time", "Exercise", "Weight (kg)", "Reps"])
+    
+    for log in logs:
+        writer.writerow([log["timestamp"], log["name"], log["weight"], log["reps"]])
+    
+    return output.getvalue()
+
+def send_email(csv_data):
+    sender_email = "YOUR_EMAIL@gmail.com"
+    receiver_email = "martinjoconnell@gmail.com"
+    password = "YOUR_APP_PASSWORD_HERE"  # Gmail App Password - DO NOT COMMIT THIS
+    
+    msg = MIMEMultipart()
+    msg['From'] = sender_email
+    msg['To'] = receiver_email
+    msg['Subject'] = f"Weekly Training Log - {datetime.now().strftime('%Y-%m-%d')}"
+    
+    body = f"Your weekly weight training log is attached.\n\nGenerated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    msg.attach(MIMEText(body, 'plain'))
+    
+    filename = f"training_log_{datetime.now().strftime('%Y%m%d')}.csv"
+    attachment = MIMEBase('application', 'octet-stream')
+    attachment.set_payload(csv_data.encode('utf-8'))
+    encoders.encode_base64(attachment)
+    attachment.add_header('Content-Disposition', f'attachment; filename={filename}')
+    msg.attach(attachment)
+    
+    try:
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(sender_email, password)
+        server.send_message(msg)
+        server.quit()
+        print(f"Email sent successfully to {receiver_email}")
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+
+if __name__ == "__main__":
+    csv_data = export_csv()
+    send_email(csv_data)
