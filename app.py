@@ -1,6 +1,8 @@
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request, redirect, send_file
 import sqlite3
 from datetime import datetime
+import csv
+import io
 
 app = Flask(__name__)
 DB = "training.db"
@@ -51,14 +53,12 @@ def index():
             exercise_id = c.fetchone()["id"]
 
         if log_id:
-            # Update existing entry
             c.execute("""
                 UPDATE logs 
                 SET exercise_id = ?, weight = ?, reps = ?
                 WHERE id = ?
             """, (exercise_id, weight, reps, log_id))
         else:
-            # Insert new entry
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             c.execute("""
                 INSERT INTO logs (exercise_id, weight, reps, timestamp)
@@ -72,21 +72,43 @@ def index():
     c.execute("SELECT * FROM exercises ORDER BY name")
     exercises = c.fetchall()
 
+    search_query = request.args.get("search", "").strip()
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
+    
     page = request.args.get("page", 1, type=int)
     per_page = 20
     offset = (page - 1) * per_page
 
-    c.execute("SELECT COUNT(*) as count FROM logs")
-    total_logs = c.fetchone()["count"]
-    total_pages = (total_logs + per_page - 1) // per_page
-
-    c.execute("""
+    query = """
         SELECT l.id, l.timestamp, e.name, l.weight, l.reps, l.exercise_id
         FROM logs l
         JOIN exercises e ON l.exercise_id = e.id
-        ORDER BY l.timestamp DESC
-        LIMIT ? OFFSET ?
-    """, (per_page, offset))
+        WHERE 1=1
+    """
+    params = []
+
+    if search_query:
+        query += " AND e.name LIKE ?"
+        params.append(f"%{search_query}%")
+    
+    if date_from:
+        query += " AND date(l.timestamp) >= ?"
+        params.append(date_from)
+    
+    if date_to:
+        query += " AND date(l.timestamp) <= ?"
+        params.append(date_to)
+
+    count_query = query.replace("SELECT l.id, l.timestamp, e.name, l.weight, l.reps, l.exercise_id", "SELECT COUNT(*) as count")
+    c.execute(count_query, params)
+    total_logs = c.fetchone()["count"]
+    total_pages = (total_logs + per_page - 1) // per_page
+
+    query += " ORDER BY l.timestamp DESC LIMIT ? OFFSET ?"
+    params.extend([per_page, offset])
+    
+    c.execute(query, params)
     logs = c.fetchall()
 
     edit_id = request.args.get("edit", type=int)
@@ -106,7 +128,39 @@ def index():
                          logs=logs, 
                          edit_log=edit_log,
                          page=page,
-                         total_pages=total_pages)
+                         total_pages=total_pages,
+                         search_query=search_query,
+                         date_from=date_from,
+                         date_to=date_to)
+
+@app.route("/export")
+def export_csv():
+    conn = get_db()
+    c = conn.cursor()
+    
+    c.execute("""
+        SELECT l.timestamp, e.name, l.weight, l.reps
+        FROM logs l
+        JOIN exercises e ON l.exercise_id = e.id
+        ORDER BY l.timestamp DESC
+    """)
+    logs = c.fetchall()
+    conn.close()
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Date/Time", "Exercise", "Weight (kg)", "Reps"])
+    
+    for log in logs:
+        writer.writerow([log["timestamp"], log["name"], log["weight"], log["reps"]])
+    
+    output.seek(0)
+    return send_file(
+        io.BytesIO(output.getvalue().encode('utf-8')),
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name=f'training_log_{datetime.now().strftime("%Y%m%d")}.csv'
+    )
 
 @app.route("/delete/<int:log_id>", methods=["POST"])
 def delete_log(log_id):
